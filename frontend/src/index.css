@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    /* Chart series colours, in fixed order (validated colour-blind safe on the
+       #0c0a0b panel surface). A team keeps its colour while it stays on the graph. */
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
+    --chart-surface: #0c0a0b;
+    --chart-grid: #282224;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply min-h-screen bg-abyss font-sans text-slate-200 antialiased;
+  }
+
+  ::selection {
+    @apply bg-accent-500/40 text-white;
+  }
+
+  /* One consistent, clearly visible focus indicator for keyboard users. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent-200 ring-offset-2 ring-offset-navy-950;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-display tracking-wide;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-navy-950;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full border-2 border-navy-950 bg-navy-600;
+  }
+}
+
+@layer components {
+  /* Dark "deck" panel: the workhorse surface for data. */
+  .panel {
+    /* Opaque instead of backdrop-blur: blurring the animated sea behind every panel made scrolling stutter. */
+    @apply rounded-xl border border-accent-500/15 bg-navy-900/90 shadow-deck;
+  }
+
+  .panel-title {
+    @apply font-display text-xs font-bold uppercase tracking-[0.22em] text-accent-300;
+  }
+
+  /* Poster surface: wanted posters, rules, the challenge sheet.
+     Black with a blood-red edge and glow; text on it uses the 'ink' (bone white) shades. */
+  .parchment {
+    @apply relative rounded-lg border border-accent-600/60 text-ink-900 shadow-poster;
+    background-color: #0d0808;
+    background-image:
+      radial-gradient(ellipse at 18% 0%, rgba(232, 40, 28, 0.16), transparent 55%),
+      radial-gradient(ellipse at 92% 100%, rgba(142, 15, 8, 0.26), transparent 55%),
+      repeating-linear-gradient(91deg, rgba(255, 255, 255, 0.016) 0 2px, transparent 2px 11px),
+      linear-gradient(160deg, #170c0c 0%, #0d0808 55%, #060303 100%);
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5 font-display text-sm font-bold uppercase tracking-[0.14em] transition duration-150 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-accent {
+    @apply btn border border-accent-300/70 bg-gradient-to-b from-accent-400 to-accent-600 text-white shadow-[0_6px_18px_-8px_rgba(232,40,28,0.9)] hover:from-accent-300 hover:to-accent-500 active:translate-y-px;
+  }
+  .btn-ghost {
+    @apply btn border border-accent-500/40 bg-navy-900/60 text-accent-200 hover:border-accent-300 hover:bg-navy-800 hover:text-accent-100;
+  }
+  .btn-danger {
+    @apply btn border border-blood-400/60 bg-gradient-to-b from-blood-500 to-blood-600 text-white hover:from-blood-400 hover:to-blood-500;
+  }
+  /* Primary action on a poster surface. */
+  .btn-ink {
+    @apply btn border border-accent-300/60 bg-gradient-to-b from-accent-400 to-accent-700 text-white shadow-[0_6px_18px_-8px_rgba(232,40,28,0.9)] hover:from-accent-300 hover:to-accent-600 active:translate-y-px;
+  }
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs tracking-[0.1em];
+  }
+
+  .field-label {
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-[0.16em] text-ocean-200;
+  }
+  .field {
+    @apply w-full rounded-md border border-navy-500 bg-navy-950/80 px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 hover:border-ocean-500 focus:border-accent-400;
+  }
+  .field-error {
+    @apply mt-1.5 text-xs font-medium text-blood-300;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em];
+  }
+
+  .table-kop {
+    @apply w-full border-collapse text-left text-sm;
+  }
+  .table-kop th {
+    @apply border-b border-accent-500/20 px-4 py-3 font-display text-[11px] font-bold uppercase tracking-[0.18em] text-accent-300;
+  }
+  .table-kop td {
+    @apply border-b border-navy-700/70 px-4 py-3 align-middle;
+  }
+
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-accent-500 focus:px-4 focus:py-2 focus:font-bold focus:text-white;
+  }
+}
+
+@layer utilities {
+  .text-accent-gradient {
+    background: linear-gradient(180deg, #ff6b5e 0%, #e8281c 45%, #8e0f08 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Motion is decoration here, never information: honour the OS setting. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,45 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Secrets — never commit real environment files
+.env
+.env.*
+!.env.example
+
+# Uploaded challenge attachments
+uploads/*
+!uploads/.gitkeep
+
+# Embedded demo database (PGlite)
+backend/.demo-db/
+
+# Logs / OS / editor
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Test artefacts
+backend/.test-uploads/
+
+# Challenge export bundles (contain flag hashes)
+challenge-export/
+
+# Automatic backups (contain the whole database)
+backups/
+
+# Practice challenges (sources, flags, writeups)
+practice/
+
+# Event challenge sources (flags, solutions)
+challenges/
+
+# Database dumps (contain password hashes and all event data)
+/black-basta-backup.sql
+*.dump
+
+# Local editor/assistant settings
+.claude/

@@ -1,0 +1,342 @@
+// Black Basta — database schema (PostgreSQL)
+
+generator client {
+  provider   = "prisma-client-js"
+  // Pure TypeScript query engine: no native engine binaries to ship in Docker.
+  // Connections go through a driver adapter (see src/db.ts).
+  engineType = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  participant
+  admin
+}
+
+enum EventState {
+  UPCOMING
+  LIVE
+  PAUSED
+  ENDED
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+  INSANE
+}
+
+enum ScoreReason {
+  SOLVE
+  HINT
+  RECALCULATED
+  /// Another crew solved a dynamic challenge this crew had solved, lowering its value.
+  DECAY
+}
+
+enum ScoringType {
+  /// Fixed points.
+  STATIC
+  /// Starts at `points` and drops towards `minimumPoints` as more crews solve it (CTFd formula).
+  DYNAMIC
+}
+
+model User {
+  id                Int       @id @default(autoincrement())
+  username          String    @unique
+  /// Lower-cased username; enforces case-insensitive uniqueness.
+  usernameKey       String    @unique
+  fullName          String
+  email             String    @unique
+  teamName          String?
+  /// Player names on a team account (at most MAX_TEAM_SIZE).
+  members           String[]  @default([])
+  passwordHash      String
+  /// Admin-viewable sealed copy of an organizer-set password (null for self-chosen ones).
+  passwordSecret    String?
+  role              Role      @default(participant)
+  /// "Pirate #047" — assigned in registration order, participants only.
+  participantNumber Int?      @unique
+  disabled          Boolean   @default(false)
+  /// Bumped to invalidate every issued session (password reset, disable).
+  tokenVersion      Int       @default(0)
+  score             Int       @default(0)
+  /// When the current score was reached — the leaderboard tie-breaker.
+  scoreReachedAt    DateTime?
+  solvedCount       Int       @default(0)
+  lastSolveAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  lastActivity      DateTime?
+
+  submissions  Submission[]
+  solves       Solve[]
+  practiceSolves PracticeSolve[]
+  hintUnlocks  HintUnlock[]
+  achievements UserAchievement[]
+  firstBloods  FirstBlood[]
+  scoreEvents  ScoreEvent[]
+  sessions     Session[]
+
+  @@index([role, disabled, score(sort: Desc), scoreReachedAt])
+  @@index([lastActivity])
+}
+
+model Category {
+  id         Int         @id @default(autoincrement())
+  name       String      @unique
+  slug       String      @unique
+  sortOrder  Int         @default(0)
+  challenges Challenge[]
+}
+
+model Challenge {
+  id          Int        @id @default(autoincrement())
+  title       String
+  slug        String     @unique
+  description String
+  categoryId  Int
+  difficulty  Difficulty @default(EASY)
+  /// Fixed value, or the starting value of a dynamic challenge.
+  points      Int
+  scoring       ScoringType @default(STATIC)
+  /// Dynamic: the lowest value it can drop to.
+  minimumPoints Int?
+  /// Dynamic: solves after which the value reaches the minimum.
+  decay         Int?
+  /// SHA-256 of "<flagSalt>:<flag>". The plaintext flag is never stored.
+  flagHash    String
+  flagSalt    String
+  /// Admin-viewable sealed copy of the flag (null if saved before this existed).
+  flagSecret  String?
+  /// Flags (main and extra) are compared ignoring capitals; hashes are of the lower-cased flag.
+  flagCaseInsensitive Boolean @default(false)
+  enabled     Boolean    @default(true)
+  /// Practice challenge: open any time, never counted in the competition.
+  practice    Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  category    Category     @relation(fields: [categoryId], references: [id])
+  hints       Hint[]
+  attachments Attachment[]
+  submissions Submission[]
+  solves      Solve[]
+  firstBlood  FirstBlood?
+  extraFlags  ChallengeFlag[]
+  practiceSolves PracticeSolve[]
+
+  @@index([enabled, categoryId])
+}
+
+model Hint {
+  id          Int    @id @default(autoincrement())
+  challengeId Int
+  content     String
+  cost        Int    @default(0)
+  sortOrder   Int    @default(0)
+
+  challenge Challenge    @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  unlocks   HintUnlock[]
+
+  @@index([challengeId])
+}
+
+/// A further accepted flag (e.g. "NIKA{Zoro}" next to "NIKA{Roronoa_Zoro}"). Only its hash is stored.
+model ChallengeFlag {
+  id          Int    @id @default(autoincrement())
+  challengeId Int
+  flagHash    String
+  flagSalt    String
+  /// Admin-viewable sealed copy.
+  secret      String?
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@index([challengeId])
+}
+
+/// A practice challenge solved by a crew. Separate from Solve: no points, no scoreboard.
+model PracticeSolve {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  challengeId Int
+  playerName  String?
+  solvedAt    DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, challengeId])
+  @@index([challengeId])
+}
+
+model HintUnlock {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  hintId     Int
+  cost       Int
+  unlockedAt DateTime @default(now())
+  /// Team member who bought it.
+  playerName String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hint Hint @relation(fields: [hintId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, hintId])
+}
+
+model Attachment {
+  id           Int      @id @default(autoincrement())
+  challengeId  Int
+  /// Sanitised display name shown to participants.
+  originalName String
+  /// Random on-disk name inside uploads/challenge_<id>/ — never user-controlled.
+  storedName   String   @unique
+  size         Int
+  createdAt    DateTime @default(now())
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@index([challengeId])
+}
+
+model Submission {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  challengeId   Int
+  /// Wrong attempts are stored (truncated) for review; correct ones are redacted.
+  submittedFlag String
+  correct       Boolean
+  ip            String?
+  /// Team member who submitted it.
+  playerName    String?
+  submittedAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@index([userId, submittedAt])
+  @@index([challengeId])
+  @@index([correct])
+  @@index([submittedAt])
+}
+
+model Solve {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  challengeId Int
+  /// Challenge value at solve time.
+  points      Int
+  /// First-blood bonus, if any.
+  bonus       Int      @default(0)
+  /// Team member who claimed it (their points on the leaderboard).
+  playerName  String?
+  solvedAt    DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, challengeId])
+  @@index([challengeId])
+  @@index([userId, solvedAt])
+}
+
+model FirstBlood {
+  id          Int      @id @default(autoincrement())
+  challengeId Int      @unique
+  userId      Int
+  bonus       Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// One row per score change: the timestamp at which a pirate reached each score.
+model ScoreEvent {
+  id         Int         @id @default(autoincrement())
+  userId     Int
+  delta      Int
+  scoreAfter Int
+  reason     ScoreReason
+  createdAt  DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model Announcement {
+  id        Int      @id @default(autoincrement())
+  title     String
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model Achievement {
+  id          Int    @id @default(autoincrement())
+  code        String @unique
+  name        String
+  description String
+  icon        String
+  sortOrder   Int    @default(0)
+
+  users UserAchievement[]
+}
+
+model UserAchievement {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  achievementId Int
+  awardedAt     DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+}
+
+/// Singleton (id = 1) holding the competition state.
+model Event {
+  id        Int        @id @default(1)
+  name      String
+  state     EventState @default(UPCOMING)
+  /// Scheduled start, used for the public countdown.
+  startsAt  DateTime?
+  /// Scheduled end; a LIVE event ends automatically when this passes.
+  endsAt    DateTime?
+  startedAt DateTime?
+  endedAt   DateTime?
+  /// Scoreboard freeze: from this time everyone sees the board as it was then.
+  freezeAt  DateTime?
+  /// The board captured at freezeAt; shown until the organizers reveal (clear the freeze).
+  frozenScoreboard Json?
+  updatedAt DateTime   @updatedAt
+}
+
+/// One logged-in device. Team accounts may have at most MAX_TEAM_SIZE at once.
+model Session {
+  /// Random id, carried inside the signed session cookie.
+  id         String   @id
+  userId     Int
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  expiresAt  DateTime
+  userAgent  String?
+  /// The team member using this device (chosen at login).
+  playerName String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}

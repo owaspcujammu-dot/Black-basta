@@ -1,0 +1,124 @@
+# Black Basta — full stack:  docker compose up --build -d
+#
+#   frontend  nginx serving the built React app and proxying /api   → :5173
+#   backend   Express API                                           → :5000
+#   postgres  PostgreSQL 16 (data in the `pgdata` volume)           → :5432 (localhost only)
+#
+# Requires a .env file with JWT_SECRET and ADMIN_PASSWORD set (see .env.example).
+# Ports bind to 127.0.0.1 by default; put nginx + HTTPS in front for a public
+# event, or set BIND_ADDRESS=0.0.0.0 for an isolated LAN.
+
+name: black-basta
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: king_of_pirates
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d king_of_pirates"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/king_of_pirates
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (see .env.example)}
+      ADMIN_SECRETS_KEY: ${ADMIN_SECRETS_KEY:-}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env (see .env.example)}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@blackbasta.local}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # The frontend container's nginx is one proxy hop; add one more for a host-level nginx.
+      TRUST_PROXY: ${TRUST_PROXY_HOPS:-1}
+      EVENT_NAME: ${EVENT_NAME:-Black Basta}
+      MAX_PARTICIPANTS: ${MAX_PARTICIPANTS:-110}
+      FLAG_PREFIX: ${FLAG_PREFIX:-NIKA}
+      FIRST_BLOOD_BONUS: ${FIRST_BLOOD_BONUS:-0}
+      SELF_REGISTRATION: ${SELF_REGISTRATION:-true}
+      MAX_TEAM_SIZE: ${MAX_TEAM_SIZE:-4}
+      SUBMIT_LIMIT_PER_MIN: ${SUBMIT_LIMIT_PER_MIN:-10}
+      SUBMIT_LIMIT_PER_CHALLENGE: ${SUBMIT_LIMIT_PER_CHALLENGE:-10}
+      DB_POOL_MAX: ${DB_POOL_MAX:-30}
+      SCOREBOARD_PUSH_MS: ${SCOREBOARD_PUSH_MS:-2000}
+      # Password hashing runs on this many threads (Node's default is 4): faster mass logins.
+      UV_THREADPOOL_SIZE: ${UV_THREADPOOL_SIZE:-8}
+      EVENT_START_AT: ${EVENT_START_AT:-}
+      EVENT_END_AT: ${EVENT_END_AT:-}
+      SEED_DEMO_CHALLENGES: ${SEED_DEMO_CHALLENGES:-false}
+      # Demo mode is never enabled in the production stack.
+      DEMO_MODE: "false"
+      UPLOAD_DIR: /app/uploads
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-50}
+    volumes:
+      - uploads:/app/uploads
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:5000:5000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:5173:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  # Automatic backups: a full copy of the site's data every BACKUP_INTERVAL_MINUTES
+  # into BACKUP_DIR on this computer (database + readable CSVs + challenge files).
+  # See docker/backup.sh, and "Backups" in the README for restoring.
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PGDATABASE: king_of_pirates
+      BACKUP_INTERVAL_MINUTES: ${BACKUP_INTERVAL_MINUTES:-15}
+      BACKUP_KEEP: ${BACKUP_KEEP:-200}
+      # Backup folder names and log times use this timezone.
+      TZ: ${BACKUP_TIMEZONE:-Asia/Kolkata}
+    volumes:
+      - ./docker/backup.sh:/backup.sh:ro
+      - uploads:/uploads:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+    entrypoint: ["sh", "/backup.sh"]
+
+volumes:
+  pgdata:
+  uploads:

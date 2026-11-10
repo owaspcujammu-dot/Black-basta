@@ -1,0 +1,23 @@
+**/node_modules
+**/dist
+**/.demo-db
+**/.test-uploads
+**/coverage
+.git
+.claude
+.env
+.env.*
+!.env.example
+uploads
+docs
+*.log
+*.md
+
+# Automatic backups: never part of an image
+backups
+
+# Practice challenges: never part of the site images
+practice
+
+# Event challenge sources: never part of the site images
+challenges

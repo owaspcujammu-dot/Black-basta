@@ -1,0 +1,32 @@
+{
+  "name": "king-of-pirates",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Black Basta — a pirate-themed cybersecurity CTF hosting platform",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,yellow \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "demo": "concurrently -n api,web -c cyan,yellow \"npm run demo -w backend\" \"npm run dev -w frontend\"",
+    "build": "npm run build -w backend && npm run build -w frontend",
+    "test": "npm run test -w backend",
+    "typecheck": "npm run typecheck -w backend && npm run typecheck -w frontend",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "tsx backend/prisma/seed.ts",
+    "loadtest": "npm run loadtest -w backend --"
+  },
+  "prisma": {
+    "schema": "backend/prisma/schema.prisma",
+    "seed": "tsx backend/prisma/seed.ts"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
